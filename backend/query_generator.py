@@ -7,7 +7,6 @@ import re
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
-from langchain.memory import ConversationBufferMemory
 
 # Load .env from backend first, then project root as fallback.
 BASE_DIR = Path(__file__).resolve().parent
@@ -159,25 +158,23 @@ repair_chain    = REPAIR_QUERY_PROMPT | llm | output_parser
 rewrite_chain   = REWRITE_FOLLOWUP_PROMPT | llm | output_parser
 
 
-CHAT_MEMORIES: dict[str, ConversationBufferMemory] = {}
+CHAT_MEMORIES: dict[str, list[tuple[str, str]]] = {}
+MAX_CHAT_TURNS = 12
 
 
-def get_chat_memory(session_id: str) -> ConversationBufferMemory:
-    """Return a per-session memory buffer for chat mode."""
-    if session_id not in CHAT_MEMORIES:
-        CHAT_MEMORIES[session_id] = ConversationBufferMemory(
-            memory_key="chat_history",
-            input_key="input",
-            output_key="output",
-            return_messages=False,
-        )
-    return CHAT_MEMORIES[session_id]
+def get_chat_history_text(session_id: str) -> str:
+    """Return formatted chat history text for follow-up rewriting."""
+    turns = CHAT_MEMORIES.get(session_id, [])
+    lines: list[str] = []
+    for user_text, assistant_text in turns:
+        lines.append(f"User: {user_text}")
+        lines.append(f"Assistant: {assistant_text}")
+    return "\n".join(lines)
 
 
 def rewrite_followup_question(session_id: str, question: str) -> str:
-    """Rewrite a follow-up question using ConversationBufferMemory history."""
-    memory = get_chat_memory(session_id)
-    history = memory.load_memory_variables({}).get("chat_history", "")
+    """Rewrite a follow-up question using in-process session history."""
+    history = get_chat_history_text(session_id)
 
     if not history.strip():
         return question.strip()
@@ -191,9 +188,11 @@ def rewrite_followup_question(session_id: str, question: str) -> str:
 
 
 def remember_chat_turn(session_id: str, user_question: str, assistant_text: str) -> None:
-    """Store the latest chat turn in session memory."""
-    memory = get_chat_memory(session_id)
-    memory.save_context({"input": user_question}, {"output": assistant_text})
+    """Store latest chat turn in memory with a fixed-size buffer."""
+    turns = CHAT_MEMORIES.setdefault(session_id, [])
+    turns.append((user_question, assistant_text))
+    if len(turns) > MAX_CHAT_TURNS:
+        del turns[:-MAX_CHAT_TURNS]
 
 
 def _pick_mongo_collection(schema: dict, question: str) -> str:
