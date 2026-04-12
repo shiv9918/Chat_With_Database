@@ -39,9 +39,13 @@ def detect_sql_dialect(db_url: str) -> str:
 def get_sql_engine(db_url: str):
     """Returns a SQLAlchemy engine"""
     try:
-        # SQLAlchemy expects postgresql://, but many users provide postgres://.
+        # Use pg8000 for PostgreSQL to avoid psycopg2 dependency issues on cloud runtimes.
         if db_url.startswith("postgres://"):
-            db_url = db_url.replace("postgres://", "postgresql://", 1)
+            db_url = db_url.replace("postgres://", "postgresql+pg8000://", 1)
+        elif db_url.startswith("postgresql+psycopg2://"):
+            db_url = db_url.replace("postgresql+psycopg2://", "postgresql+pg8000://", 1)
+        elif db_url.startswith("postgresql://"):
+            db_url = db_url.replace("postgresql://", "postgresql+pg8000://", 1)
 
         engine = create_engine(db_url)
         # Test connection

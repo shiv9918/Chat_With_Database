@@ -1,6 +1,8 @@
 fastapi
 uvicorn
+python-multipart
 sqlalchemy
+pg8000
 pymongo
 python-dotenv
 langchain
