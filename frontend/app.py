@@ -373,7 +373,6 @@ def send_chat_message(composer: str) -> None:
 
 with st.sidebar:
     st.subheader("💬 Chats")
-    st.caption(f"Backend API: {API_URL}")
 
     if st.button("➕ New Chat", use_container_width=True):
         st.session_state.chat_messages = []
@@ -417,16 +416,19 @@ with st.sidebar:
     )
 
     if st.button("⬆️ Use Uploaded File", use_container_width=True, disabled=uploaded_file is None):
-        file_size_mb = (uploaded_file.size or 0) / (1024 * 1024)
-        if file_size_mb > MAX_UPLOAD_MB:
-            st.error(
-                f"❌ File is too large ({file_size_mb:.1f} MB). "
-                f"Maximum allowed is {MAX_UPLOAD_MB} MB on this deployment."
-            )
+        if uploaded_file is None:
+            st.error("❌ Please upload a CSV/Excel file first.")
         else:
-            with st.spinner("Uploading and preparing database..."):
-                if connect_uploaded_file(uploaded_file):
-                    st.success("✅ Uploaded file connected as SQLite table `uploaded_data`.")
+            file_size_mb = (uploaded_file.size or 0) / (1024 * 1024)
+            if file_size_mb > MAX_UPLOAD_MB:
+                st.error(
+                    f"❌ File is too large ({file_size_mb:.1f} MB). "
+                    f"Maximum allowed is {MAX_UPLOAD_MB} MB on this deployment."
+                )
+            else:
+                with st.spinner("Uploading and preparing database..."):
+                    if connect_uploaded_file(uploaded_file):
+                        st.success("✅ Uploaded file connected as SQLite table `uploaded_data`.")
 
     if st.session_state.connected and st.session_state.schema:
         st.divider()
