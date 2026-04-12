@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 from uuid import uuid4
 
@@ -8,7 +9,7 @@ import streamlit as st
 from sqlalchemy import create_engine
 
 
-API_URL = "http://127.0.0.1:8000"
+API_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8000").rstrip("/")
 HISTORY_FILE = Path(__file__).with_name(".query_history.json")
 UPLOAD_DB_DIR = Path(__file__).with_name(".uploaded_dbs")
 UPLOADED_TABLE_NAME = "uploaded_data"
@@ -49,7 +50,7 @@ def connect_backend(db_url: str) -> bool:
         st.error(f"❌ {data.get('detail', 'Connection failed')}")
         return False
     except requests.exceptions.ConnectionError:
-        st.error("❌ Cannot reach backend. Is `uvicorn main:app` running?")
+        st.error(f"❌ Cannot reach backend at {API_URL}. Check FRONTEND env var BACKEND_URL.")
         return False
     except Exception as e:
         st.error(f"❌ Error: {str(e)}")
@@ -361,6 +362,7 @@ def send_chat_message(composer: str) -> None:
 
 with st.sidebar:
     st.subheader("💬 Chats")
+    st.caption(f"Backend API: {API_URL}")
 
     if st.button("➕ New Chat", use_container_width=True):
         st.session_state.chat_messages = []
