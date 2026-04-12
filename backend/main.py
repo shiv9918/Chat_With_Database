@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from schema_extractor import extract_schema
@@ -11,9 +11,17 @@ from query_generator import (
 from query_executor import execute_query
 from db_manager import detect_db_type, detect_sql_dialect
 import os
+import io
+from pathlib import Path
+from uuid import uuid4
 import re
+import pandas as pd
+from sqlalchemy import create_engine
 
 app = FastAPI(title="Text-to-Query API", version="1.0")
+
+UPLOAD_DB_DIR = Path(__file__).resolve().parent / ".uploaded_dbs"
+UPLOADED_TABLE_NAME = "uploaded_data"
 
 default_origins = [
     "http://localhost:5173",
@@ -119,6 +127,48 @@ def connect_and_get_schema(req: ConnectRequest):
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/connect-upload")
+async def connect_upload_and_get_schema(file: UploadFile = File(...)):
+    """Create a temporary SQLite DB from uploaded CSV/Excel and return schema + DB URL."""
+    filename = file.filename or ""
+    suffix = Path(filename).suffix.lower()
+    if suffix not in {".csv", ".xlsx", ".xls"}:
+        raise HTTPException(status_code=400, detail="Unsupported file type. Upload CSV, XLSX, or XLS.")
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+    try:
+        stream = io.BytesIO(content)
+        if suffix == ".csv":
+            df = pd.read_csv(stream)
+        else:
+            df = pd.read_excel(stream)
+
+        if df.empty:
+            raise HTTPException(status_code=400, detail="Uploaded file has no rows.")
+
+        UPLOAD_DB_DIR.mkdir(parents=True, exist_ok=True)
+        db_file = UPLOAD_DB_DIR / f"upload_{uuid4().hex}.db"
+        sqlite_url = f"sqlite:///{db_file.resolve().as_posix()}"
+        engine = create_engine(sqlite_url)
+        df.to_sql(UPLOADED_TABLE_NAME, engine, if_exists="replace", index=False)
+
+        result = extract_schema(sqlite_url)
+        return {
+            "success": True,
+            "db_type": result["db_type"],
+            "schema": result["schema"],
+            "db_url": sqlite_url,
+            "table_name": UPLOADED_TABLE_NAME,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Upload connect failed: {str(e)}")
 
 
 @app.post("/query")
