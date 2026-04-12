@@ -1,0 +1,52 @@
+[
+  {
+    "id": "b335e869dbe14ae5a98971ed8d6b48fb",
+    "question": "show all",
+    "db_type": "sql"
+  },
+  {
+    "id": "d4937058e67242358fb28ebadafaeca2",
+    "question": "how many entries are there",
+    "db_type": "sql"
+  },
+  {
+    "id": "40b841e60954447db11ae227b1d78b61",
+    "question": "show me how many entries are there",
+    "db_type": "sql"
+  },
+  {
+    "id": "39b514198a384c8d8ca0a3f0e593ff57",
+    "question": "hey",
+    "db_type": "sql"
+  },
+  {
+    "id": "dfd761d18ba54c9cabb78f778c71d1f1",
+    "question": "show all the entries",
+    "db_type": "sql"
+  },
+  {
+    "id": "aef58acfa3774a79bb8aa6c38a7e3132",
+    "question": "show all the dataentries with all the coumns",
+    "db_type": "sql"
+  },
+  {
+    "id": "1a7240786a4c486cac3eec58fc171052",
+    "question": "how many data entris in this file",
+    "db_type": "sql"
+  },
+  {
+    "id": "cb5a3e50003c4a45aa2b9666e382bd3e",
+    "question": "show me with name email id class name and roll no",
+    "db_type": "sql"
+  },
+  {
+    "id": "e1ca478cd3f6485ca566512090090b61",
+    "question": "show the name of all the students",
+    "db_type": "sql"
+  },
+  {
+    "id": "d2a7cda8e73d4463a2525ddabdc906e5",
+    "question": "show with name roll no  class",
+    "db_type": "sql"
+  }
+]
