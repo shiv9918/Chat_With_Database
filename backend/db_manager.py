@@ -4,6 +4,13 @@ import certifi
 import pymongo.ssl_support as pymongo_ssl_support
 from urllib.parse import urlparse
 
+
+def _is_unreachable_cloud_host(hostname: str | None) -> bool:
+    if not hostname:
+        return False
+    normalized = hostname.lower()
+    return normalized in {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
+
 # PyMongo can prefer a PyOpenSSL-backed TLS path when pyOpenSSL is installed.
 # In this environment that path is incompatible with the installed crypto stack,
 # so force PyMongo to use the stdlib ssl implementation instead.
@@ -39,6 +46,14 @@ def detect_sql_dialect(db_url: str) -> str:
 def get_sql_engine(db_url: str):
     """Returns a SQLAlchemy engine"""
     try:
+        parsed = urlparse(db_url)
+        if _is_unreachable_cloud_host(parsed.hostname):
+            raise ConnectionError(
+                "SQL connection failed: The host in your DB URL is localhost. "
+                "From Render, localhost points to the Render container itself, not your local machine. "
+                "Use a publicly reachable database host (for example Render Postgres/Supabase/Neon)."
+            )
+
         # Use pg8000 for PostgreSQL to avoid psycopg2 dependency issues on cloud runtimes.
         if db_url.startswith("postgres://"):
             db_url = db_url.replace("postgres://", "postgresql+pg8000://", 1)

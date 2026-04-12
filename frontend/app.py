@@ -6,13 +6,11 @@ from uuid import uuid4
 import pandas as pd
 import requests
 import streamlit as st
-from sqlalchemy import create_engine
 
 
 API_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8000").rstrip("/")
 HISTORY_FILE = Path(__file__).with_name(".query_history.json")
-UPLOAD_DB_DIR = Path(__file__).with_name(".uploaded_dbs")
-UPLOADED_TABLE_NAME = "uploaded_data"
+MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "20"))
 
 
 def load_query_history() -> list[dict]:
@@ -57,25 +55,38 @@ def connect_backend(db_url: str) -> bool:
         return False
 
 
-def create_sqlite_from_upload(uploaded_file) -> str:
-    """Create a temporary SQLite database from uploaded CSV/Excel and return its URL."""
-    suffix = Path(uploaded_file.name).suffix.lower()
-    if suffix == ".csv":
-        df = pd.read_csv(uploaded_file)
-    elif suffix in {".xlsx", ".xls"}:
-        df = pd.read_excel(uploaded_file)
-    else:
-        raise ValueError("Unsupported file type. Upload CSV, XLSX, or XLS.")
+def connect_uploaded_file(uploaded_file) -> bool:
+    """Upload CSV/Excel to backend and connect using backend-created temporary SQLite DB."""
+    try:
+        file_bytes = uploaded_file.getvalue()
+        files = {
+            "file": (
+                uploaded_file.name,
+                file_bytes,
+                uploaded_file.type or "application/octet-stream",
+            )
+        }
+        res = requests.post(f"{API_URL}/connect-upload", files=files, timeout=180)
+        data = res.json()
 
-    if df.empty:
-        raise ValueError("Uploaded file is empty.")
+        if res.status_code == 200 and data.get("success"):
+            st.session_state.connected = True
+            st.session_state.schema = data["schema"]
+            st.session_state.db_type = data["db_type"]
+            st.session_state.db_url = data["db_url"]
+            st.session_state.last_query_response = None
+            st.session_state.chat_messages = []
+            st.session_state.chat_session_id = uuid4().hex
+            return True
 
-    UPLOAD_DB_DIR.mkdir(parents=True, exist_ok=True)
-    db_file = UPLOAD_DB_DIR / f"upload_{uuid4().hex}.db"
-    sqlite_url = f"sqlite:///{db_file.resolve().as_posix()}"
-    engine = create_engine(sqlite_url)
-    df.to_sql(UPLOADED_TABLE_NAME, engine, if_exists="replace", index=False)
-    return sqlite_url
+        st.error(f"❌ {data.get('detail', 'Upload connection failed')}")
+        return False
+    except requests.exceptions.ConnectionError:
+        st.error(f"❌ Cannot reach backend at {API_URL}. Check FRONTEND env var BACKEND_URL.")
+        return False
+    except Exception as e:
+        st.error(f"❌ Upload failed: {str(e)}")
+        return False
 
 
 st.set_page_config(page_title="Text-to-Query AI", page_icon="🧠", layout="wide")
@@ -406,13 +417,16 @@ with st.sidebar:
     )
 
     if st.button("⬆️ Use Uploaded File", use_container_width=True, disabled=uploaded_file is None):
-        with st.spinner("Creating temporary database from uploaded file..."):
-            try:
-                sqlite_url = create_sqlite_from_upload(uploaded_file)
-                if connect_backend(sqlite_url):
+        file_size_mb = (uploaded_file.size or 0) / (1024 * 1024)
+        if file_size_mb > MAX_UPLOAD_MB:
+            st.error(
+                f"❌ File is too large ({file_size_mb:.1f} MB). "
+                f"Maximum allowed is {MAX_UPLOAD_MB} MB on this deployment."
+            )
+        else:
+            with st.spinner("Uploading and preparing database..."):
+                if connect_uploaded_file(uploaded_file):
                     st.success("✅ Uploaded file connected as SQLite table `uploaded_data`.")
-            except Exception as e:
-                st.error(f"❌ Upload failed: {str(e)}")
 
     if st.session_state.connected and st.session_state.schema:
         st.divider()
