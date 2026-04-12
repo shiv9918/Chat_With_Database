@@ -10,14 +10,21 @@ from query_generator import (
 )
 from query_executor import execute_query
 from db_manager import detect_db_type, detect_sql_dialect
+import os
 import re
 
 app = FastAPI(title="Text-to-Query API", version="1.0")
 
-# Allow React frontend to call this API
+default_origins = [
+    "http://localhost:5173",
+    "http://localhost:8501",
+]
+cors_origins_raw = os.getenv("CORS_ORIGINS", "")
+cors_origins = [origin.strip() for origin in cors_origins_raw.split(",") if origin.strip()] or default_origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "https://your-vercel-app.vercel.app"],
+    allow_origins=cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
